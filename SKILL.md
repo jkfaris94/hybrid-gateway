@@ -19,7 +19,7 @@ The Gateway runs on an always-on VPS and owns messaging, agents, and models. A l
 - **Preferred route:** Gateway stays on loopback; Tailscale Serve (or another stable HTTPS reverse proxy with WebSocket upgrade) gives it a `wss://` URL on the tailnet. Never expose port 18789 to the public internet, never use Tailscale Funnel for it.
 - **Pairing:** use a single-use Node-host pairing link from the Control UI (or `openclaw devices join-code`). Never paste Gateway tokens, setup codes, or keys into chat, logs, or shell history.
 - **Approval:** inspect the exact request (name, device id, IP, requested commands) and approve that request id only. A capability expansion is a new approval and may stay pending.
-- **Exec:** named absolute-path commands plus approval gates. No `/bin/bash` or `/bin/zsh` allowlist shortcuts.
+- **Exec:** named absolute-path commands plus approval gates. No shell (`sh`, `bash`, `zsh`) in any allowlist.
 - **SSH:** optional, separate, least-privilege. It is not a substitute for pairing.
 
 Each step ends with a **Done when** check. Stop at a failed check.

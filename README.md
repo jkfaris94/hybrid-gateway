@@ -7,7 +7,7 @@ Run the OpenClaw Gateway on a VPS and pair a local machine (Mac Mini, desktop, R
 - Gateway stays on loopback; Tailscale Serve publishes it as `wss://` on the tailnet only. No public port, no Funnel.
 - Pairing uses a single-use Node-host link (`openclaw devices join-code` or Control UI). Tokens and setup codes never go through chat.
 - Approve the exact pending request id; capability expansions (including post-upgrade reapproval) are separate approvals.
-- Node exec is allowlist + approval gates with absolute-path binaries. No `/bin/bash` shortcuts.
+- Node exec is allowlist + approval gates with absolute-path binaries. No shell in any allowlist.
 - SSH is an optional, separately secured fallback (dedicated user, ed25519, verified host key, `IdentitiesOnly yes`, `rsync -avn` preview).
 
 Every step ends with a verifiable **Done when** check. Full walkthrough in [SKILL.md](./SKILL.md); upgrade gotchas in [references/upgrade-notes.md](./references/upgrade-notes.md).
