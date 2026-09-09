@@ -14,7 +14,7 @@ Every step ends with a verifiable **Done when** check. Full walkthrough in [SKIL
 
 ## Companion
 
-[`remote-node-ssh`](https://github.com/kanso-agent/remote-node-ssh) for SSH setup, day-to-day exec, and file transfer once the topology is secure.
+[`remote-node-ssh`](https://github.com/jkfaris94/remote-node-ssh) for SSH setup, day-to-day exec, and file transfer once the topology is secure.
 
 ## Install
 

@@ -52,15 +52,18 @@ Put only the `joinUrl` value into a private file on the node (for example `~/joi
 
 ## Step 3: Connect the node
 
-On the node machine:
+On the node machine, pick one. `--target-file` reads the join URL from the file and deletes it, and the link is single-use, so each command below needs its own link from Step 2.
+
+**A. Service install (normal path):**
 
 ```bash
-openclaw connect --target-file ~/join.txt --display-name "Mac Mini"            # foreground proof
-openclaw connect --target-file ~/join.txt --display-name "Mac Mini" --service  # install as LaunchAgent / systemd
-openclaw node status                                                            # service, pid, command
+openclaw connect --target-file ~/join.txt --display-name "Mac Mini" --service
+openclaw node status                          # service, pid, command
 ```
 
-`--target-file` reads the join URL from the file and deletes it, so mint a fresh link for the service install. The service form writes `~/Library/LaunchAgents/ai.openclaw.node.plist` on macOS or a systemd user unit on Linux; the node log is `~/Library/Logs/openclaw/node.log` on macOS.
+**B. Foreground proof first:** run `openclaw connect --target-file ~/join.txt --display-name "Mac Mini"` without `--service`, watch it register, stop it, then return to Step 2, mint a fresh link, and run A with that fresh file.
+
+The service form writes `~/Library/LaunchAgents/ai.openclaw.node.plist` on macOS or a systemd user unit on Linux; the node log is `~/Library/Logs/openclaw/node.log` on macOS.
 
 **Done when:** `openclaw node status` on the node shows the service running, and `openclaw nodes pending` on the VPS shows one new request from it.
 
