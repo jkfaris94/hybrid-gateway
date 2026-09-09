@@ -1,32 +1,25 @@
 ---
 name: hybrid-gateway
 description: Set up and troubleshoot a secure hybrid OpenClaw architecture where the Gateway runs on a VPS and a Mac or other local machine is a paired node. Covers Tailscale node pairing (single-use join links), exact-request approval and reapproval, remote node exec with least-privilege allowlists, node reconnect, and SSH as a separate fallback. Use when connecting a local node to a remote Gateway, debugging node connectivity or "reapproval pending", or planning a VPS + local hardware split.
-metadata:
-  openclaw:
-    env:
-      - name: OPENCLAW_ALLOW_INSECURE_PRIVATE_WS
-        description: Optional, advanced direct-tailnet route only. Set to 1 on the node service to allow ws:// to a non-loopback Tailscale address. Not needed on the preferred Tailscale Serve (wss://) route.
-        scope: node-service
-        required: false
 ---
 
 # Hybrid Gateway: VPS + Local Node
 
-The Gateway runs on an always-on VPS and owns messaging, agents, and models. A local machine (Mac Mini, desktop, Pi) is a paired **node** for what the VPS lacks: GPU or local models, real browser with a residential IP, macOS tools, local files. A node is a peripheral.
+The Gateway runs on an always-on VPS and owns messaging, agents, and models. A local machine (Mac Mini, desktop, Pi) is a paired **node** for what the VPS lacks: GPU or local models, a real browser with a residential IP, macOS tools, local files. A node is a peripheral.
 
 ## Safety contract
 
-- **Preferred route:** Gateway stays on loopback; Tailscale Serve (or another stable HTTPS reverse proxy with WebSocket upgrade) gives it a `wss://` URL on the tailnet. Never expose port 18789 to the public internet, never use Tailscale Funnel for it.
-- **Pairing:** use a single-use Node-host pairing link from the Control UI (or `openclaw devices join-code`). Never paste Gateway tokens, setup codes, or keys into chat, logs, or shell history.
+- **Route:** Gateway stays on loopback; Tailscale Serve (or another stable HTTPS reverse proxy with WebSocket upgrade) gives it a `wss://` URL on the tailnet. Never expose port 18789 to the public internet, never use Tailscale Funnel for it. `gateway.bind=lan`, `0.0.0.0`, and plaintext `ws://` are not defaults.
+- **Pairing:** a single-use Node-host join link from the Control UI or `openclaw devices join-code`. Never paste Gateway tokens, setup codes, or keys into chat, logs, or shell history.
 - **Approval:** inspect the exact request (name, device id, IP, requested commands) and approve that request id only. A capability expansion is a new approval and may stay pending.
 - **Exec:** named absolute-path commands plus approval gates. No shell (`sh`, `bash`, `zsh`) in any allowlist.
-- **SSH:** optional, separate, least-privilege. It is not a substitute for pairing.
+- **SSH:** optional, separate, least-privilege. It is not a substitute for pairing and is set up in the companion `remote-node-ssh` skill.
 
 Each step ends with a **Done when** check. Stop at a failed check.
 
 ## Prerequisites
 
-Both machines run the same OpenClaw version (`openclaw --version`), both are on one tailnet (`tailscale status` shows both), and the VPS Gateway is running (`openclaw gateway status`).
+Upgrade the Gateway first; a node may run the same version or the previous supported release (N-1) until it is upgraded. Both machines are on one tailnet (`tailscale status` shows both) and the VPS Gateway is running (`openclaw gateway status`).
 
 ## Step 1: Keep the Gateway private, publish it with Tailscale Serve
 
@@ -35,44 +28,39 @@ On the VPS:
 ```bash
 openclaw config get gateway.bind          # keep "loopback"
 openclaw config get gateway.auth.mode     # "token" or "password"; never "none"
-openclaw config get gateway.trustedProxies
 tailscale serve --bg --https=443 http://127.0.0.1:18789
-tailscale serve status                    # shows https://<vps>.<tailnet>.ts.net (tailnet only)
+tailscale serve status                    # https://<vps>.<tailnet>.ts.net (tailnet only)
 ```
 
-`gateway.trustedProxies` must be `["127.0.0.1"]` (the Serve proxy). Never put the Tailscale range `100.0.0.0/8` in it: every node then counts as a proxy and is rejected with `403 Proxy client attribution is required`.
+Serve runs on the same host and forwards from 127.0.0.1, so for this exact setup `gateway.trustedProxies` should contain only `127.0.0.1`. If you already run another legitimate reverse proxy, keep its address too; never widen the list to the Tailscale range `100.0.0.0/8`, or every node counts as a proxy and is rejected with `403 Proxy client attribution is required`.
+
+A direct tailnet or LAN bind without Serve is possible but outside this skill: it needs token or password auth, a firewall limiting 18789 to private addresses, no port-forward or Funnel, and a TLS route for pairing. If you cannot prove that boundary, use Serve.
 
 **Done when:** `openclaw gateway status` shows `bind=loopback`, and `tailscale serve status` lists the `https://…ts.net` route as tailnet only.
 
-### Advanced branch: direct tailnet or LAN, no Serve
+## Step 2: Mint a single-use join link
 
-Only when all four hold: token or password auth is on; a firewall limits 18789 to the tailnet or known private addresses; there is no public port-forward, Funnel, or cloud-firewall opening; and the node uses the exact Gateway URL. Then `openclaw config set gateway.bind tailnet` (or `lan` if local agent sessions on the VPS still need 127.0.0.1) and restart. `bind=lan` and plaintext `ws://` are not general defaults. If you cannot prove the boundary, use Serve.
-
-## Step 2: Mint a single-use pairing link
-
-Control UI: **Devices → Node host → Create pairing link**. CLI equivalent on the VPS:
+Control UI: **Devices → Node host → Create pairing link**, then copy the link privately to the node machine. CLI equivalent on the VPS:
 
 ```bash
-openclaw devices join-code --json > /tmp/join.json && chmod 600 /tmp/join.json
+openclaw devices join-code --json    # prints {"joinUrl": "https://…/j/<code>", "command": "…"}
 ```
 
-The link is single-use and expires. Move it to the node privately (scp, or read it on the node's own screen). Never relay it through a chat transcript.
+Put only the `joinUrl` value into a private file on the node (for example `~/join.txt`, `chmod 600`), not the JSON document. The link is single-use and expires. Never relay it through a chat transcript.
 
-**Done when:** the link exists on the node machine and nowhere in chat or shell history.
+**Done when:** the join URL exists in that one file on the node and nowhere in chat or shell history.
 
 ## Step 3: Connect the node
 
-On the node machine, the join URL carries the Gateway address:
+On the node machine:
 
 ```bash
 openclaw connect --target-file ~/join.txt --display-name "Mac Mini"            # foreground proof
 openclaw connect --target-file ~/join.txt --display-name "Mac Mini" --service  # install as LaunchAgent / systemd
-openclaw node status                                                            # service, pid, log path
+openclaw node status                                                            # service, pid, command
 ```
 
-`--target-file` reads the link from a private file and deletes it. The service form installs `~/Library/LaunchAgents/ai.openclaw.node.plist` on macOS or a systemd user unit on Linux, with env in `~/.openclaw/service-env/`. Node log: `~/Library/Logs/openclaw/node.log` (macOS).
-
-Advanced branch (Step 1 direct route): `openclaw node install --host <gateway-tailscale-ip> --port 18789 --no-tls --display-name "Mac Mini"` and set `OPENCLAW_ALLOW_INSECURE_PRIVATE_WS=1` in the node service env. Do it only on a proven private route.
+`--target-file` reads the join URL from the file and deletes it, so mint a fresh link for the service install. The service form writes `~/Library/LaunchAgents/ai.openclaw.node.plist` on macOS or a systemd user unit on Linux; the node log is `~/Library/Logs/openclaw/node.log` on macOS.
 
 **Done when:** `openclaw node status` on the node shows the service running, and `openclaw nodes pending` on the VPS shows one new request from it.
 
@@ -111,33 +99,23 @@ openclaw nodes invoke --node "Mac Mini" --command system.which --params '{"bins"
 
 **Done when:** `approvals get` shows only binaries with a named use, and an unlisted command produces a pending approval rather than output.
 
-## Step 6: SSH fallback, separately secured (optional)
+## Step 6: SSH fallback (optional, separate)
 
-Use SSH for file transfer, a full login shell (nvm, Homebrew PATH), or when the node is offline. On the node create a dedicated non-root user; on the VPS:
+SSH covers file transfer, a full login shell, and an offline node. It is a second trust boundary: dedicated non-root user, ed25519 key, verified host key, `IdentitiesOnly yes`, private Tailscale route, `rsync -avn` preview before any write, no destructive defaults. Set it up with the companion `remote-node-ssh` skill only after Steps 1 to 5 pass.
 
-```bash
-ssh-keygen -t ed25519 -f ~/.ssh/id_node -N ""
-ssh-copy-id -i ~/.ssh/id_node.pub <node-user>@<node-tailscale-ip>   # verify the host-key fingerprint on first connect
-printf 'Host my-node\n  HostName <node-tailscale-ip>\n  User <node-user>\n  IdentityFile ~/.ssh/id_node\n  IdentitiesOnly yes\n' >> ~/.ssh/config
-ssh my-node -- true
-rsync -avn ./data/ my-node:~/data/          # preview first; drop -n only after reading the plan
-```
-
-Never set `StrictHostKeyChecking no`. Pass JSON or quotes as a script (`ssh my-node bash -s < job.sh`), not inline. Routine exec and transfer patterns live in the companion `remote-node-ssh` skill; adopt it only after Steps 1 to 5 pass.
-
-**Done when:** `ssh my-node -- true` exits 0 with a verified host key and a non-root user.
+**Done when:** the fallback has a named owner, a least-privilege account, and a tested private route.
 
 ## Diagnose by the first failed transition
 
 | Symptom | Meaning | Action |
 |---|---|---|
 | No connection attempt in `node.log` | route | fix DNS, Serve, TLS, firewall; `tailscale status` on both |
-| `403 Proxy client attribution is required` | trustedProxies too wide | set `gateway.trustedProxies` to `["127.0.0.1"]`, restart |
-| `Cannot connect over plaintext ws://` | direct route without TLS | use Serve `wss://`, or the advanced env override on a proven private route |
-| auth error, pending list empty | credential | recreate the join link (Step 2); old codes expire |
+| `403 Proxy client attribution is required` | trustedProxies too wide | narrow `gateway.trustedProxies`, restart |
+| `Cannot connect over plaintext ws://` | no TLS on the route | use the Serve `wss://` URL |
+| auth error, pending list empty | credential | mint a new join link (Step 2); old links expire |
 | `pairing required` | route and auth fine | `nodes pending` → approve the exact id |
 | `reapproval pending` after upgrade | new caps requested | `nodes describe`, then approve or leave pending |
-| paired but disconnected | node side | `openclaw node status` on the node, machine sleep, Wi-Fi; prefer Ethernet, disable sleep |
+| paired but disconnected | node side | `openclaw node status` on the node; sleep, Wi-Fi; prefer Ethernet, disable sleep |
 | exec denied or `command not found` | allowlist or PATH | `approvals get --node`; use the absolute path from `nodes describe` PATH |
 
 A request id is stale after any retry that changed the node's identity or requested caps. Re-list before approving. Order: route → auth → pairing → disconnect.
@@ -151,11 +129,11 @@ openclaw security audit --deep
 openclaw nodes status
 ```
 
-Confirm the node reconnects after the last change, the Gateway is unreachable from outside the tailnet, and no log line holds a token. Resolve critical findings; document intentional warnings. Version-specific upgrade notes: `references/upgrade-notes.md`.
+Confirm the node reconnects after the last change, the Gateway is unreachable from outside the tailnet, and no log line holds a token. Resolve critical findings; document intentional warnings. Upgrade procedure: `references/upgrade-notes.md`.
 
 ## Tested with
 
-OpenClaw 2026.9.3 (Gateway and node), Node 24.18, Tailscale 1.x, macOS 26 (Mac16,10) node, Ubuntu 24.04 VPS.
+OpenClaw 2026.9.3 (Gateway and node), Node 24, Tailscale 1.x, macOS 26 node, Ubuntu 24.04 VPS.
 
 ## License
 

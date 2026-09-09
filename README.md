@@ -5,16 +5,16 @@ Run the OpenClaw Gateway on a VPS and pair a local machine (Mac Mini, desktop, R
 ## Security-first (1.1.0)
 
 - Gateway stays on loopback; Tailscale Serve publishes it as `wss://` on the tailnet only. No public port, no Funnel.
-- Pairing uses a single-use Node-host link (`openclaw devices join-code` or Control UI). Tokens and setup codes never go through chat.
+- Pairing uses a single-use Node-host join link (Control UI or `openclaw devices join-code`). Tokens and setup codes never go through chat.
 - Approve the exact pending request id; capability expansions (including post-upgrade reapproval) are separate approvals.
 - Node exec is allowlist + approval gates with absolute-path binaries. No shell in any allowlist.
-- SSH is an optional, separately secured fallback (dedicated user, ed25519, verified host key, `IdentitiesOnly yes`, `rsync -avn` preview).
+- SSH is an optional, separately secured fallback, set up in the companion skill.
 
-Every step ends with a verifiable **Done when** check. Full walkthrough in [SKILL.md](./SKILL.md); upgrade gotchas in [references/upgrade-notes.md](./references/upgrade-notes.md).
+Every step ends with a verifiable **Done when** check. Full walkthrough in [SKILL.md](./SKILL.md); upgrade procedure in [references/upgrade-notes.md](./references/upgrade-notes.md).
 
 ## Companion
 
-[`remote-node-ssh`](https://github.com/kanso-agent/remote-node-ssh) for day-to-day exec and file transfer once the topology is secure.
+[`remote-node-ssh`](https://github.com/kanso-agent/remote-node-ssh) for SSH setup, day-to-day exec, and file transfer once the topology is secure.
 
 ## Install
 
